@@ -1,0 +1,17 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+beautifulsoup4==4.12.2
+playwright==1.40.0
+gitpython==3.1.40
+aiohttp==3.9.1
+python-dotenv==1.0.0
+pydantic==2.5.2
+sqlalchemy==2.0.23
+aiosqlite==0.19.0
+pytest==7.4.3
+httpx==0.25.2
+pillow>=10.0.0
+ultralytics>=8.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0 

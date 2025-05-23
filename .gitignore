@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# Environment
+.env
+.env.*
+
+# Node
+node_modules/
+
+# Build
+build/
+dist/
+.next/
+.vite/
+
+# Logs
+*.log
+
+# Mac
+.DS_Store
+
+# Playwright/Browser traces
+playwright/
+traces/
+
+# Temp
+.temp/
+temp/
+
+# VSCode
+.vscode/
+
+# OS junk
+Thumbs.db
+
+# Ignore test portfolios or training data
+portfolio-samples/
+training-data/
+
+# Ignore frontend build output
+portfolio-grader/dist/
+
+# Ignore backend temp dirs
+__temp__/ 
