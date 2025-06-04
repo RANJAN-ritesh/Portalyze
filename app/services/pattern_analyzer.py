@@ -129,8 +129,30 @@ class PortfolioPatternAnalyzer:
         self.skill_patterns = defaultdict(set)
         self.contact_patterns = defaultdict(set)
         
+        # Content quality metrics
+        self.content_metrics = {
+            'min_section_length': 50,  # Minimum characters for a valid section
+            'min_project_description': 100,  # Minimum characters for project description
+            'min_skill_count': 5,  # Minimum number of skills to be considered valid
+            'required_sections': {'about', 'projects', 'skills', 'contact'}
+        }
+        
+        # Technical stack patterns
+        self.tech_stack_patterns = {
+            'frontend': {
+                'frameworks': {'react', 'vue', 'angular', 'svelte'},
+                'libraries': {'jquery', 'bootstrap', 'tailwind', 'material-ui'},
+                'build_tools': {'webpack', 'vite', 'parcel', 'rollup'}
+            },
+            'backend': {
+                'frameworks': {'express', 'django', 'flask', 'spring', 'rails'},
+                'databases': {'mongodb', 'postgresql', 'mysql', 'redis'},
+                'apis': {'rest', 'graphql', 'grpc'}
+            }
+        }
+        
     def analyze_portfolio(self, html_content: str) -> Dict[str, Any]:
-        """Analyze a single portfolio to extract patterns."""
+        """Analyze a single portfolio to extract patterns and quality metrics."""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             
@@ -144,7 +166,22 @@ class PortfolioPatternAnalyzer:
                 self._analyze_skill_patterns(soup)
                 self._analyze_contact_patterns(soup)
             
-            return self.get_patterns()
+            # Analyze content quality
+            quality_metrics = self._analyze_content_quality(soup, sections)
+            
+            # Analyze technical stack
+            tech_stack = self._analyze_technical_stack(soup)
+            
+            # Get base patterns
+            patterns = self.get_patterns()
+            
+            # Add quality metrics and tech stack to patterns
+            patterns.update({
+                'quality_metrics': quality_metrics,
+                'tech_stack': tech_stack
+            })
+            
+            return patterns
         except Exception as e:
             print(f"Error in pattern analysis: {str(e)}")
             return self.get_patterns()
@@ -375,4 +412,94 @@ class PortfolioPatternAnalyzer:
             "project_patterns": dict(self.project_patterns),
             "skill_patterns": dict(self.skill_patterns),
             "contact_patterns": dict(self.contact_patterns)
-        }) 
+        })
+    
+    def _analyze_content_quality(self, soup: BeautifulSoup, sections: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze the quality of content in each section."""
+        quality_metrics = {
+            'section_coverage': 0,
+            'content_quality': {},
+            'accessibility': {},
+            'performance': {}
+        }
+        
+        # Check section coverage
+        found_sections = set(sections.keys())
+        quality_metrics['section_coverage'] = len(found_sections.intersection(self.content_metrics['required_sections'])) / len(self.content_metrics['required_sections'])
+        
+        # Analyze each section
+        for section_name, section in sections.items():
+            section_metrics = {
+                'length': len(section.get_text().strip()),
+                'has_images': bool(section.find_all('img')),
+                'has_links': bool(section.find_all('a')),
+                'heading_structure': self._analyze_heading_structure(section),
+                'accessibility_score': self._analyze_accessibility(section)
+            }
+            quality_metrics['content_quality'][section_name] = section_metrics
+        
+        return quality_metrics
+    
+    def _analyze_heading_structure(self, section: BeautifulSoup) -> Dict[str, Any]:
+        """Analyze the heading structure of a section."""
+        headings = section.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+        structure = {
+            'has_main_heading': False,
+            'heading_levels': set(),
+            'heading_count': len(headings)
+        }
+        
+        for heading in headings:
+            level = int(heading.name[1])
+            structure['heading_levels'].add(level)
+            if level == 1:
+                structure['has_main_heading'] = True
+        
+        return structure
+    
+    def _analyze_accessibility(self, section: BeautifulSoup) -> Dict[str, Any]:
+        """Analyze accessibility features of a section."""
+        accessibility = {
+            'has_aria_labels': bool(section.find(attrs={'aria-label': True})),
+            'has_alt_text': bool(section.find('img', alt=True)),
+            'has_semantic_elements': bool(section.find(['article', 'nav', 'main', 'aside'])),
+            'color_contrast_issues': self._check_color_contrast(section)
+        }
+        return accessibility
+    
+    def _check_color_contrast(self, section: BeautifulSoup) -> List[str]:
+        """Check for potential color contrast issues."""
+        issues = []
+        # This is a simplified check - in production, use a proper color contrast analyzer
+        text_elements = section.find_all(['p', 'span', 'div', 'a'])
+        for element in text_elements:
+            style = element.get('style', '')
+            if 'color:' in style and 'background-color:' not in style:
+                issues.append(f"Potential contrast issue: {element.get_text()[:30]}...")
+        return issues
+    
+    def _analyze_technical_stack(self, soup: BeautifulSoup) -> Dict[str, Any]:
+        """Analyze the technical stack used in the portfolio."""
+        tech_stack = {
+            'frontend': {'frameworks': set(), 'libraries': set(), 'build_tools': set()},
+            'backend': {'frameworks': set(), 'databases': set(), 'apis': set()}
+        }
+        
+        # Check for script tags and their sources
+        scripts = soup.find_all('script')
+        for script in scripts:
+            src = script.get('src', '')
+            for category, patterns in self.tech_stack_patterns.items():
+                for tech_type, techs in patterns.items():
+                    for tech in techs:
+                        if tech.lower() in src.lower():
+                            tech_stack[category][tech_type].add(tech)
+        
+        # Check for CSS framework classes
+        for element in soup.find_all(class_=True):
+            classes = ' '.join(element['class']).lower()
+            for tech in self.tech_stack_patterns['frontend']['libraries']:
+                if tech.lower() in classes:
+                    tech_stack['frontend']['libraries'].add(tech)
+        
+        return tech_stack 
