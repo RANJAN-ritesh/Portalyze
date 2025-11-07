@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: portalyze-backend
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./cache.db
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: MAX_CONCURRENT_ANALYSES
+        value: 5
+      - key: ANALYSIS_TIMEOUT_SECONDS
+        value: 90
+      - key: PAGE_LOAD_TIMEOUT
+        value: 30
+      - key: AI_REQUEST_TIMEOUT
+        value: 20
+      - key: CACHE_TTL_DAYS
+        value: 7
+      - key: ENABLE_CACHING
+        value: true
+      - key: RATE_LIMIT_PER_HOUR
+        value: 100
+      - key: RATE_LIMIT_PER_DAY
+        value: 1000
+      - key: ENABLE_FACE_DETECTION
+        value: true
+      - key: ENABLE_AI_ANALYSIS
+        value: true
+      - key: ENABLE_SCREENSHOT_CAPTURE
+        value: false
+      - key: ENABLE_SHAREABLE_LINKS
+        value: true
+      - key: LOG_LEVEL
+        value: INFO
+      - key: USE_PLAYWRIGHT
+        value: false
+    healthCheckPath: /health

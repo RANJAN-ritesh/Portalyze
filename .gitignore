@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# Environment
+.env
+.env.*
+*.env.local
+*.env.production
+portfolio-grader/.env
+portfolio-grader/.env.*
+env/
+
+# Virtual environments
+venv/
+.venv/
+
+# Node
+node_modules/
+
+# Build
+build/
+dist/
+.next/
+.vite/
+frontend-build/
+
+# Logs
+*.log
+logs/
+backend.log
+frontend.log
+frontend_*.log
+*.sqlite
+cache.db
+
+# Mac
+.DS_Store
+
+# Playwright/Browser traces
+playwright/
+traces/
+
+# Temp
+.temp/
+temp/
+
+# VSCode
+.vscode/
+
+# OS junk
+Thumbs.db
+
+# Ignore test portfolios or training data
+portfolio-samples/
+training-data/
+
+# Ignore frontend build output
+portfolio-grader/dist/
+
+# Ignore backend temp dirs
+__temp__/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Database backups
+*.db.backup*
+cache.db.lock
+
+# Old structure (to be removed after migration)
+Portalyze/ 

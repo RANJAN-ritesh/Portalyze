@@ -1,0 +1,39 @@
+# Core Framework
+fastapi>=0.115.0
+uvicorn>=0.32.0
+python-multipart>=0.0.9
+
+# Web Scraping & Analysis
+beautifulsoup4>=4.12.3
+aiohttp>=3.10.0
+# playwright>=1.48.0  # Optional - see requirements-optional.txt for local dev
+
+# AI Providers
+google-generativeai>=0.8.0
+groq>=0.11.0
+
+# Configuration & Environment
+python-dotenv>=1.0.1
+pydantic>=2.9.0
+pydantic-settings>=2.5.0
+
+# Database
+sqlalchemy>=2.0.35
+aiosqlite>=0.20.0
+
+# Image Processing & Face Detection (optional for deployment)
+# mediapipe>=0.10.14  # Optional - not compatible with all Python versions
+# pillow>=10.4.0  # Optional - for face detection
+# opencv-python>=4.10.0  # Optional - for face detection
+# numpy>=1.26.0  # Optional - for face detection
+
+# Rate Limiting & Security
+slowapi>=0.1.9
+
+# Testing
+pytest>=8.3.0
+httpx>=0.27.0
+pytest-asyncio>=0.24.0
+
+# Utilities
+validators>=0.34.0
