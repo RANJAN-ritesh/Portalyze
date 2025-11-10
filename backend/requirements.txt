@@ -6,8 +6,9 @@ python-multipart>=0.0.9
 # Web Scraping & Analysis
 beautifulsoup4>=4.12.3
 aiohttp>=3.10.0
-requests-html>=0.10.0  # Lightweight JS execution (~120MB vs Playwright's 300MB)
+# Smart aiohttp with Rendertron cloud rendering for JS sites (0MB local!)
 # playwright>=1.48.0  # Too heavy for Render free tier (300MB)
+# requests-html>=0.10.0  # Needs runtime browser download, doesn't work on Render
 
 # AI Providers
 google-generativeai>=0.8.0

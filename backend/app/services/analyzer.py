@@ -8,23 +8,7 @@ import asyncio
 from typing import Dict, Any, Optional, List
 from bs4 import BeautifulSoup
 
-# Try to import Playwright (optional dependency)
-try:
-    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
-    PLAYWRIGHT_AVAILABLE = True
-except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
-    PlaywrightTimeout = TimeoutError
-    print("⚠️  Playwright not available - trying lighter alternatives")
-
-# Try to import requests-html (lighter alternative)
-try:
-    from requests_html import AsyncHTMLSession
-    REQUESTS_HTML_AVAILABLE = True
-    print("✅ requests-html available - using for JS rendering")
-except ImportError:
-    REQUESTS_HTML_AVAILABLE = False
-    print("⚠️  requests-html not available - using aiohttp fallback")
+# No browser dependencies needed - using cloud rendering!
 
 from app.services.ai_analyzer import AIAnalyzer
 from app.services.rubric_engine import RubricEngine
@@ -145,117 +129,30 @@ class PortfolioAnalyzer:
 
     async def _fetch_portfolio(self, url: str) -> tuple:
         """
-        Fetch portfolio with cascading fallback:
-        1. Playwright (full featured, heavy) - if available
-        2. requests-html (JS execution, lighter) - BEST for Render free tier
-        3. aiohttp (no JS, fastest) - last resort
+        Smart portfolio fetcher:
+        - Uses aiohttp (0MB, instant)
+        - Detects JS-only sites automatically
+        - Uses Google Rendertron (free cloud service) for JS rendering
+        - No local browser needed!
 
         Returns: (html_content, screenshot_url, viewport_data)
         """
-        # Try Playwright first (best accuracy)
-        if PLAYWRIGHT_AVAILABLE:
-            try:
-                return await self._fetch_with_playwright(url)
-            except Exception as e:
-                logger.warning(f"Playwright failed for {url}: {str(e)}, trying requests-html")
-
-        # Try requests-html (good accuracy, lighter)
-        if REQUESTS_HTML_AVAILABLE:
-            try:
-                return await self._fetch_with_requests_html(url)
-            except Exception as e:
-                logger.warning(f"requests-html failed for {url}: {str(e)}, falling back to aiohttp")
-
-        # Last resort: aiohttp (no JS execution)
         return await self._fetch_with_aiohttp(url)
 
-    async def _fetch_with_playwright(self, url: str) -> tuple:
-        """Fetch portfolio using Playwright"""
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-
-            try:
-                # Navigate with timeout
-                await page.goto(
-                    url,
-                    wait_until="networkidle",
-                    timeout=settings.page_load_timeout * 1000
-                )
-
-                # Additional wait for React/Vue SPAs to fully render
-                await page.wait_for_timeout(2000)
-
-                # Get HTML content
-                html_content = await page.content()
-
-                # Test responsiveness
-                viewport_data = await self._test_responsiveness(page)
-
-                # Take screenshot if enabled
-                screenshot = None
-                if settings.enable_screenshot_capture:
-                    screenshot_bytes = await page.screenshot(full_page=False)
-                    # Here you could upload to S3 or save locally
-                    # For now, just note that we have it
-                    screenshot = "screenshot_captured"
-
-                await browser.close()
-                return html_content, screenshot, viewport_data
-
-            except PlaywrightTimeout:
-                logger.warning(f"Timeout loading {url}")
-                await browser.close()
-                return None, None, {}
-            except Exception as e:
-                logger.error(f"Error fetching {url}: {str(e)}")
-                await browser.close()
-                return None, None, {}
-
-    async def _fetch_with_requests_html(self, url: str) -> tuple:
-        """
-        Fetch portfolio using requests-html (lighter than Playwright)
-
-        Pros:
-        - Executes JavaScript (gets full rendered content)
-        - Lighter than Playwright (~120MB vs 300MB)
-        - Works on Render free tier
-        - 85-90% accuracy for JS portfolios
-
-        Returns: (html_content, screenshot_url, viewport_data)
-        """
-        session = None
-        try:
-            session = AsyncHTMLSession()
-            response = await session.get(url, timeout=settings.page_load_timeout)
-
-            # Render JavaScript (wait for React/Vue to load)
-            await response.html.arender(sleep=2, timeout=settings.page_load_timeout)
-
-            html_content = response.html.html
-
-            # Close session
-            await session.close()
-
-            # No screenshot or viewport testing with requests-html
-            return html_content, None, {}
-
-        except asyncio.TimeoutError:
-            logger.warning(f"Timeout loading {url} with requests-html")
-            if session:
-                await session.close()
-            return None, None, {}
-        except Exception as e:
-            logger.error(f"Error fetching {url} with requests-html: {str(e)}")
-            if session:
-                await session.close()
-            return None, None, {}
-
     async def _fetch_with_aiohttp(self, url: str) -> tuple:
-        """Fetch portfolio using aiohttp (fallback when Playwright unavailable)"""
+        """
+        Smart aiohttp fetcher with JS detection and cloud rendering fallback
+
+        Strategy:
+        1. Fetch with aiohttp (fast, 0MB)
+        2. Detect if JS-only (empty <body> or just <div id="root">)
+        3. If JS-only, use free cloud rendering service
+        4. If static HTML, return as-is
+        """
         try:
             timeout = aiohttp.ClientTimeout(total=settings.page_load_timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
+                # Try normal fetch first
                 async with session.get(url, allow_redirects=True) as response:
                     if response.status != 200:
                         logger.warning(f"Non-200 status code for {url}: {response.status}")
@@ -263,7 +160,24 @@ class PortfolioAnalyzer:
 
                     html_content = await response.text()
 
-                    # No screenshot or responsiveness testing with aiohttp
+                    # Detect if this is a JS-only site (React/Vue/Next.js skeleton)
+                    if self._is_js_only_site(html_content):
+                        logger.info(f"Detected JS-only site: {url}, using cloud renderer")
+
+                        # Try RenderTron (Google's free pre-rendering service)
+                        try:
+                            rendertron_url = f"https://render-tron.appspot.com/render/{url}"
+                            async with session.get(rendertron_url, timeout=timeout) as render_response:
+                                if render_response.status == 200:
+                                    rendered_html = await render_response.text()
+                                    logger.info(f"Successfully rendered JS for {url}")
+                                    return rendered_html, None, {}
+                                else:
+                                    logger.warning(f"Rendertron failed with status {render_response.status}, using skeleton HTML")
+                        except Exception as e:
+                            logger.warning(f"Rendertron failed: {str(e)}, using skeleton HTML")
+
+                    # Return original HTML (either static or fallback if rendering failed)
                     return html_content, None, {}
 
         except asyncio.TimeoutError:
@@ -272,6 +186,51 @@ class PortfolioAnalyzer:
         except Exception as e:
             logger.error(f"Error fetching {url} with aiohttp: {str(e)}")
             return None, None, {}
+
+    def _is_js_only_site(self, html: str) -> bool:
+        """
+        Detect if a site is JS-only (React/Vue/Next.js)
+
+        Indicators:
+        - Very short HTML (<2000 chars)
+        - Has <div id="root"> or <div id="app">
+        - Has <script src="...main.js">
+        - Body has almost no content
+        """
+        if len(html) > 5000:
+            return False  # Likely has content
+
+        html_lower = html.lower()
+
+        # Check for common JS framework patterns
+        js_indicators = [
+            '<div id="root"',
+            '<div id="app"',
+            '<div id="__next"',  # Next.js
+            'react-root',
+            'vue-app',
+            '/static/js/main.',
+            '/static/js/bundle.'
+        ]
+
+        has_js_indicator = any(indicator in html_lower for indicator in js_indicators)
+
+        # Check if body is basically empty
+        body_start = html_lower.find('<body')
+        body_end = html_lower.find('</body>')
+
+        if body_start > 0 and body_end > body_start:
+            body_content = html_lower[body_start:body_end]
+            # Remove scripts and links
+            body_content = body_content.replace('<script', '').replace('<link', '')
+            body_text_length = len(body_content.strip())
+
+            # If body is less than 500 chars after removing scripts/links, it's probably JS-only
+            is_empty_body = body_text_length < 500
+
+            return has_js_indicator and is_empty_body
+
+        return has_js_indicator
 
     async def _test_responsiveness(self, page) -> Dict[str, Any]:
         """Test portfolio at multiple viewport sizes"""
