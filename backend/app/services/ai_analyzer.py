@@ -90,7 +90,8 @@ class GroqProvider(AIProvider):
         self.api_key = settings.groq_api_key
         if self.api_key:
             self.client = Groq(api_key=self.api_key)
-            self.model = "llama-3.1-70b-versatile"
+            # Updated to newer model (llama-3.1-70b-versatile was decommissioned)
+            self.model = "llama-3.3-70b-versatile"
 
     @property
     def name(self) -> str:
