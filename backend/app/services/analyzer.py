@@ -162,9 +162,16 @@ class PortfolioAnalyzer:
 
                     # Detect if this is a JS-only site (React/Vue/Next.js skeleton)
                     if self._is_js_only_site(html_content):
-                        logger.info(f"Detected JS-only site: {url}, extracting content from JS bundles")
+                        logger.info(f"Detected JS-only site: {url}, trying smart extraction methods")
 
-                        # Extract JS bundle URLs from the HTML
+                        # Method 1: Check for SSR data (Next.js, Nuxt, etc.) - FASTEST & BEST
+                        ssr_html = self._extract_ssr_data(html_content)
+                        if ssr_html:
+                            logger.info(f"Successfully extracted SSR data for {url}")
+                            return ssr_html, None, {}
+
+                        # Method 2: Extract from JS bundles - SLOWER but works for CSR
+                        logger.info(f"No SSR data found, extracting from JS bundles")
                         enhanced_html = await self._extract_from_js_bundles(html_content, url, session, timeout)
                         if enhanced_html:
                             logger.info(f"Successfully extracted content from JS bundles for {url}")
@@ -226,6 +233,150 @@ class PortfolioAnalyzer:
             return has_js_indicator and is_empty_body
 
         return has_js_indicator
+
+    def _extract_ssr_data(self, html: str) -> str:
+        """
+        Extract Server-Side Rendered data from HTML
+
+        Many modern frameworks embed data in the HTML:
+        - Next.js: <script id="__NEXT_DATA__">
+        - Nuxt: <script>window.__NUXT__=
+        - React: window.__INITIAL_STATE__
+        - Vue: window.__VUE_SSR_CONTEXT__
+
+        This is MUCH better than parsing JS bundles!
+        """
+        import json
+        import re
+
+        try:
+            # Method 1: Next.js __NEXT_DATA__ (most common)
+            next_data_pattern = r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>'
+            match = re.search(next_data_pattern, html, re.DOTALL)
+
+            if match:
+                try:
+                    data = json.loads(match.group(1))
+                    logger.info("Found Next.js SSR data!")
+                    return self._build_html_from_nextjs_data(html, data)
+                except:
+                    pass
+
+            # Method 2: Nuxt __NUXT__ data
+            nuxt_pattern = r'window\.__NUXT__\s*=\s*({.*?});'
+            match = re.search(nuxt_pattern, html, re.DOTALL)
+
+            if match:
+                try:
+                    data = json.loads(match.group(1))
+                    logger.info("Found Nuxt SSR data!")
+                    return self._build_html_from_nuxt_data(html, data)
+                except:
+                    pass
+
+            # Method 3: Generic __INITIAL_STATE__
+            state_pattern = r'window\.__INITIAL_STATE__\s*=\s*({.*?});'
+            match = re.search(state_pattern, html, re.DOTALL)
+
+            if match:
+                try:
+                    data = json.loads(match.group(1))
+                    logger.info("Found React SSR data!")
+                    return self._build_html_from_state_data(html, data)
+                except:
+                    pass
+
+            # Method 4: Check for script tags with type="application/json"
+            json_pattern = r'<script[^>]*type="application/json"[^>]*>(.*?)</script>'
+            matches = re.findall(json_pattern, html, re.DOTALL)
+
+            for json_str in matches:
+                try:
+                    data = json.loads(json_str)
+                    if isinstance(data, dict) and len(data) > 0:
+                        logger.info("Found embedded JSON data!")
+                        return self._build_html_from_generic_data(html, data)
+                except:
+                    continue
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error extracting SSR data: {str(e)}")
+            return None
+
+    def _build_html_from_nextjs_data(self, html: str, data: dict) -> str:
+        """Build HTML from Next.js __NEXT_DATA__"""
+        try:
+            # Next.js structure: data.props.pageProps usually has content
+            page_props = data.get('props', {}).get('pageProps', {})
+
+            # Extract any text content from the data
+            all_text = self._extract_text_from_dict(page_props)
+
+            if all_text:
+                return self._build_synthetic_html(html, all_text)
+
+            return None
+        except:
+            return None
+
+    def _build_html_from_nuxt_data(self, html: str, data: dict) -> str:
+        """Build HTML from Nuxt __NUXT__ data"""
+        try:
+            all_text = self._extract_text_from_dict(data)
+
+            if all_text:
+                return self._build_synthetic_html(html, all_text)
+
+            return None
+        except:
+            return None
+
+    def _build_html_from_state_data(self, html: str, data: dict) -> str:
+        """Build HTML from generic state data"""
+        try:
+            all_text = self._extract_text_from_dict(data)
+
+            if all_text:
+                return self._build_synthetic_html(html, all_text)
+
+            return None
+        except:
+            return None
+
+    def _build_html_from_generic_data(self, html: str, data: dict) -> str:
+        """Build HTML from generic JSON data"""
+        return self._build_html_from_state_data(html, data)
+
+    def _extract_text_from_dict(self, obj, depth=0, max_depth=10) -> list:
+        """Recursively extract meaningful text from nested dict/list"""
+        if depth > max_depth:
+            return []
+
+        texts = []
+
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                # Key itself might be meaningful
+                if isinstance(key, str) and len(key) > 3:
+                    texts.append(key)
+
+                # Recurse into value
+                texts.extend(self._extract_text_from_dict(value, depth+1, max_depth))
+
+        elif isinstance(obj, list):
+            for item in obj:
+                texts.extend(self._extract_text_from_dict(item, depth+1, max_depth))
+
+        elif isinstance(obj, str):
+            # Keep meaningful strings only
+            if len(obj) > 5 and not obj.startswith('http') and not obj.startswith('/'):
+                # Filter out code/technical strings
+                if not any(bad in obj.lower() for bad in ['function', 'return', 'import', '=>', 'const']):
+                    texts.append(obj)
+
+        return texts
 
     async def _extract_from_js_bundles(self, html: str, base_url: str, session, timeout) -> str:
         """
