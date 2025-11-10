@@ -162,20 +162,15 @@ class PortfolioAnalyzer:
 
                     # Detect if this is a JS-only site (React/Vue/Next.js skeleton)
                     if self._is_js_only_site(html_content):
-                        logger.info(f"Detected JS-only site: {url}, using cloud renderer")
+                        logger.info(f"Detected JS-only site: {url}, extracting content from JS bundles")
 
-                        # Try RenderTron (Google's free pre-rendering service)
-                        try:
-                            rendertron_url = f"https://render-tron.appspot.com/render/{url}"
-                            async with session.get(rendertron_url, timeout=timeout) as render_response:
-                                if render_response.status == 200:
-                                    rendered_html = await render_response.text()
-                                    logger.info(f"Successfully rendered JS for {url}")
-                                    return rendered_html, None, {}
-                                else:
-                                    logger.warning(f"Rendertron failed with status {render_response.status}, using skeleton HTML")
-                        except Exception as e:
-                            logger.warning(f"Rendertron failed: {str(e)}, using skeleton HTML")
+                        # Extract JS bundle URLs from the HTML
+                        enhanced_html = await self._extract_from_js_bundles(html_content, url, session, timeout)
+                        if enhanced_html:
+                            logger.info(f"Successfully extracted content from JS bundles for {url}")
+                            return enhanced_html, None, {}
+                        else:
+                            logger.warning(f"Could not extract JS content, using skeleton HTML")
 
                     # Return original HTML (either static or fallback if rendering failed)
                     return html_content, None, {}
@@ -231,6 +226,165 @@ class PortfolioAnalyzer:
             return has_js_indicator and is_empty_body
 
         return has_js_indicator
+
+    async def _extract_from_js_bundles(self, html: str, base_url: str, session, timeout) -> str:
+        """
+        Extract content from JavaScript bundles for React/Vue/Next.js sites
+
+        Strategy:
+        1. Find all <script src="..."> tags
+        2. Fetch the JS bundles
+        3. Extract text content using regex
+        4. Build synthetic HTML with extracted content
+
+        This works because React/Vue apps have all content embedded in JS bundles!
+        """
+        try:
+            from urllib.parse import urljoin
+            import re
+
+            # Find all script tags
+            script_pattern = r'<script[^>]+src="([^"]+)"'
+            script_urls = re.findall(script_pattern, html)
+
+            all_content = []
+
+            # Fetch and parse each JS bundle
+            for script_url in script_urls[:5]:  # Limit to first 5 scripts
+                try:
+                    full_url = urljoin(base_url, script_url)
+                    logger.info(f"Fetching JS bundle: {full_url}")
+
+                    async with session.get(full_url, timeout=timeout) as js_response:
+                        if js_response.status == 200:
+                            js_content = await js_response.text()
+
+                            # Extract text content from JS
+                            extracted = self._parse_js_content(js_content)
+                            all_content.extend(extracted)
+
+                except Exception as e:
+                    logger.warning(f"Error fetching JS bundle {script_url}: {str(e)}")
+                    continue
+
+            if not all_content:
+                return None
+
+            # Build synthetic HTML with extracted content
+            synthetic_html = self._build_synthetic_html(html, all_content)
+            return synthetic_html
+
+        except Exception as e:
+            logger.error(f"Error extracting from JS bundles: {str(e)}")
+            return None
+
+    def _parse_js_content(self, js_code: str) -> list:
+        """
+        Extract meaningful text content from JavaScript code
+
+        Looks for:
+        - String literals with actual content
+        - Object properties that look like content
+        - Text between quotes that's longer than 10 chars
+        """
+        import re
+
+        extracted = []
+
+        # Pattern 1: Find strings in quotes (common in JSX)
+        # Matches: "About Me", "My Projects", "Contact", etc.
+        string_pattern = r'["\']([A-Z][a-zA-Z0-9\s,.\-!?()]{10,200})["\']'
+        matches = re.findall(string_pattern, js_code)
+
+        for match in matches:
+            # Filter out code-looking strings
+            if not any(bad in match for bad in ['function', 'return', 'import', 'export', 'const', 'var', 'let', '=>']):
+                extracted.append(match.strip())
+
+        # Pattern 2: Find URLs (linkedin, github, etc.)
+        url_pattern = r'https?://[a-zA-Z0-9\-\.]+\.[a-z]{2,}(?:/[^\s"\']*)?'
+        urls = re.findall(url_pattern, js_code)
+        extracted.extend(urls)
+
+        # Pattern 3: Find email addresses
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        emails = re.findall(email_pattern, js_code)
+        extracted.extend(emails)
+
+        # Remove duplicates and very short strings
+        unique_content = list(set([x for x in extracted if len(x) > 5]))
+
+        return unique_content[:100]  # Limit to avoid memory issues
+
+    def _build_synthetic_html(self, original_html: str, extracted_content: list) -> str:
+        """
+        Build a synthetic HTML document with extracted content
+
+        This creates sections based on keywords found in the content
+        """
+        # Categorize content
+        about_content = []
+        project_content = []
+        skill_content = []
+        contact_content = []
+        other_content = []
+
+        about_keywords = ['about', 'developer', 'engineer', 'designer', 'student', 'graduate', 'experience']
+        project_keywords = ['project', 'built', 'created', 'developed', 'application', 'website', 'app']
+        skill_keywords = ['react', 'javascript', 'python', 'java', 'css', 'html', 'node', 'angular', 'vue', 'typescript']
+        contact_keywords = ['linkedin', 'github', 'email', 'contact', '@', 'https://']
+
+        for content in extracted_content:
+            content_lower = content.lower()
+
+            if any(kw in content_lower for kw in contact_keywords):
+                contact_content.append(content)
+            elif any(kw in content_lower for kw in skill_keywords):
+                skill_content.append(content)
+            elif any(kw in content_lower for kw in project_keywords):
+                project_content.append(content)
+            elif any(kw in content_lower for kw in about_keywords):
+                about_content.append(content)
+            else:
+                other_content.append(content)
+
+        # Build synthetic HTML
+        synthetic_body = ['<div id="root">']
+
+        if about_content:
+            synthetic_body.append('<section id="about" class="about-section">')
+            for text in about_content[:5]:
+                synthetic_body.append(f'<p>{text}</p>')
+            synthetic_body.append('</section>')
+
+        if project_content:
+            synthetic_body.append('<section id="projects" class="projects-section">')
+            for text in project_content[:10]:
+                synthetic_body.append(f'<div class="project"><h3>{text}</h3></div>')
+            synthetic_body.append('</section>')
+
+        if skill_content:
+            synthetic_body.append('<section id="skills" class="skills-section">')
+            for text in skill_content[:15]:
+                synthetic_body.append(f'<span class="skill">{text}</span>')
+            synthetic_body.append('</section>')
+
+        if contact_content:
+            synthetic_body.append('<section id="contact" class="contact-section">')
+            for text in contact_content[:10]:
+                if 'http' in text:
+                    synthetic_body.append(f'<a href="{text}" target="_blank">{text}</a>')
+                else:
+                    synthetic_body.append(f'<p>{text}</p>')
+            synthetic_body.append('</section>')
+
+        synthetic_body.append('</div>')
+
+        # Replace the empty body in original HTML
+        body_html = '\n'.join(synthetic_body)
+        enhanced_html = original_html.replace('<div id="root"></div>', body_html)
+
+        return enhanced_html
 
     async def _test_responsiveness(self, page) -> Dict[str, Any]:
         """Test portfolio at multiple viewport sizes"""
