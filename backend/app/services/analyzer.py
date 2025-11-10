@@ -22,6 +22,7 @@ from app.services.image_validator import ImageValidator
 from app.database.cache import cache_service
 from app.config import settings
 import time
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -134,9 +135,16 @@ class PortfolioAnalyzer:
 
     async def _fetch_portfolio(self, url: str) -> tuple:
         """
-        Fetch portfolio using Playwright
+        Fetch portfolio using Playwright or aiohttp fallback
         Returns: (html_content, screenshot_url, viewport_data)
         """
+        if PLAYWRIGHT_AVAILABLE:
+            return await self._fetch_with_playwright(url)
+        else:
+            return await self._fetch_with_aiohttp(url)
+
+    async def _fetch_with_playwright(self, url: str) -> tuple:
+        """Fetch portfolio using Playwright"""
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
@@ -177,6 +185,28 @@ class PortfolioAnalyzer:
                 logger.error(f"Error fetching {url}: {str(e)}")
                 await browser.close()
                 return None, None, {}
+
+    async def _fetch_with_aiohttp(self, url: str) -> tuple:
+        """Fetch portfolio using aiohttp (fallback when Playwright unavailable)"""
+        try:
+            timeout = aiohttp.ClientTimeout(total=settings.page_load_timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url, allow_redirects=True) as response:
+                    if response.status != 200:
+                        logger.warning(f"Non-200 status code for {url}: {response.status}")
+                        return None, None, {}
+
+                    html_content = await response.text()
+
+                    # No screenshot or responsiveness testing with aiohttp
+                    return html_content, None, {}
+
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout loading {url} with aiohttp")
+            return None, None, {}
+        except Exception as e:
+            logger.error(f"Error fetching {url} with aiohttp: {str(e)}")
+            return None, None, {}
 
     async def _test_responsiveness(self, page) -> Dict[str, Any]:
         """Test portfolio at multiple viewport sizes"""
