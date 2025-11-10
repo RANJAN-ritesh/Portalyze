@@ -6,7 +6,7 @@ python-multipart>=0.0.9
 # Web Scraping & Analysis
 beautifulsoup4>=4.12.3
 aiohttp>=3.10.0
-playwright>=1.48.0  # Enabled for production to handle JS-rendered portfolios
+# playwright>=1.48.0  # Disabled - Render free tier can't install Chromium browsers
 
 # AI Providers
 google-generativeai>=0.8.0

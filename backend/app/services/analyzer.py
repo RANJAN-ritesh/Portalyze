@@ -139,7 +139,11 @@ class PortfolioAnalyzer:
         Returns: (html_content, screenshot_url, viewport_data)
         """
         if PLAYWRIGHT_AVAILABLE:
-            return await self._fetch_with_playwright(url)
+            try:
+                return await self._fetch_with_playwright(url)
+            except Exception as e:
+                logger.warning(f"Playwright failed for {url}: {str(e)}, falling back to aiohttp")
+                return await self._fetch_with_aiohttp(url)
         else:
             return await self._fetch_with_aiohttp(url)
 

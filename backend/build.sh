@@ -7,7 +7,8 @@ echo "📦 Installing Python dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-echo "🌐 Installing Playwright browsers..."
-playwright install --with-deps chromium
+# Playwright disabled for Render free tier - uses aiohttp fallback instead
+# echo "🌐 Installing Playwright browsers..."
+# playwright install --with-deps chromium
 
 echo "✅ Build complete!"
