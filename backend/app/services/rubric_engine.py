@@ -405,9 +405,36 @@ class RubricEngine:
         if all_links:
             invalid_links = []
             for link in all_links:
-                href = link['href']
-                # Check if link has a valid protocol or is anchor/email/tel
-                if not href.startswith(('http', 'https', '#', 'mailto:', 'tel:', '/')):
+                href = link['href'].strip()
+
+                # Skip empty links
+                if not href:
+                    link_text = link.get_text(strip=True)[:40]
+                    link_display = f"'(empty)' (text: {link_text})" if link_text else "'(empty)'"
+                    invalid_links.append(link_display)
+                    continue
+
+                # Check if link is potentially invalid
+                # Valid patterns:
+                # - http/https (external links)
+                # - # (anchors)
+                # - mailto:/tel: (special protocols)
+                # - / (absolute paths)
+                # - ./ or ../ (relative paths)
+                # - any other relative path (e.g., "about.html", "projects")
+                # Invalid patterns:
+                # - javascript: (should use onclick instead)
+                # - void(0) or similar
+                is_valid = (
+                    href.startswith(('http://', 'https://')) or  # External links
+                    href.startswith('#') or  # Anchors
+                    href.startswith(('mailto:', 'tel:')) or  # Special protocols
+                    href.startswith('/') or  # Absolute paths
+                    href.startswith(('./', '../')) or  # Relative paths with .
+                    (not href.startswith(('javascript:', 'void')))  # Not JS or void
+                )
+
+                if not is_valid:
                     # Get link text for context
                     link_text = link.get_text(strip=True)[:40]
                     link_display = f"'{href}' (text: {link_text})" if link_text else f"'{href}'"

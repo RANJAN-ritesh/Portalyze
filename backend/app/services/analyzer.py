@@ -70,7 +70,7 @@ class PortfolioAnalyzer:
             results = await asyncio.gather(
                 self._run_rubric_analysis(html_content, portfolio_url),
                 self._run_ai_analysis(html_content),
-                self._run_image_analysis(html_content),
+                self._run_image_analysis(html_content, portfolio_url),
                 return_exceptions=True
             )
 
@@ -757,9 +757,10 @@ class PortfolioAnalyzer:
             logger.error(f"AI analysis error: {str(e)}")
             return {"analysis": "AI analysis failed", "provider": "None"}
 
-    async def _run_image_analysis(self, html_content: str) -> Dict[str, Any]:
+    async def _run_image_analysis(self, html_content: str, portfolio_url: str) -> Dict[str, Any]:
         """Find and validate profile images"""
         try:
+            from urllib.parse import urljoin
             soup = BeautifulSoup(html_content, 'html.parser')
 
             # Find potential profile images
@@ -783,9 +784,7 @@ class PortfolioAnalyzer:
 
             if profile_img:
                 # Make absolute URL if relative
-                if profile_img.startswith('/'):
-                    # Would need base URL here
-                    pass
+                profile_img = urljoin(portfolio_url, profile_img)
 
                 # Validate image
                 validation_result = await self.image_validator.validate_image_url(profile_img)
