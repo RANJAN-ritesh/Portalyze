@@ -37,10 +37,11 @@ class AIProvider(ABC):
 class GeminiProvider(AIProvider):
     """Google Gemini AI Provider"""
 
-    def __init__(self):
-        self.api_key = settings.gemini_api_key
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or settings.gemini_api_key
+        self.model = None
         if self.api_key:
-            genai.configure(api_key=self.api_key)
+            # Note: We'll configure per-request to support dynamic API keys
             self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
     @property
@@ -53,6 +54,9 @@ class GeminiProvider(AIProvider):
     async def analyze(self, html_content: str, prompt: str) -> Dict[str, Any]:
         """Analyze with Gemini"""
         try:
+            # Configure with the API key for this request
+            genai.configure(api_key=self.api_key)
+
             # Limit content size to avoid token limits
             limited_content = html_content[:50000]  # ~50KB should be safe
 
@@ -222,14 +226,25 @@ class AIAnalyzer:
         available = [p.name for p in self.providers if p.is_available()]
         logger.info(f"AI Providers available: {', '.join(available)}")
 
-    async def analyze(self, html_content: str) -> Dict[str, Any]:
+    async def analyze(self, html_content: str, gemini_api_key: Optional[str] = None) -> Dict[str, Any]:
         """
         Analyze portfolio with best available AI provider
         Returns structured analysis with provider info
+
+        Args:
+            html_content: The HTML content to analyze
+            gemini_api_key: Optional Gemini API key for this specific request
         """
         prompt = self._get_analysis_prompt()
 
-        for provider in self.providers:
+        # If a custom Gemini API key is provided, use it with priority
+        providers_to_try = self.providers
+        if gemini_api_key:
+            # Create a temporary Gemini provider with the custom key
+            custom_gemini = GeminiProvider(api_key=gemini_api_key)
+            providers_to_try = [custom_gemini] + [p for p in self.providers if p.name != "Gemini"]
+
+        for provider in providers_to_try:
             if not provider.is_available():
                 continue
 

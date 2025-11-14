@@ -99,6 +99,7 @@ class PortfolioSubmission(BaseModel):
     """Portfolio submission model"""
     portfolio_url: HttpUrl
     force_refresh: Optional[bool] = False
+    gemini_api_key: Optional[str] = None
 
     @validator('portfolio_url')
     def validate_url(cls, v):
@@ -257,6 +258,7 @@ async def grade_portfolio(
     """
     portfolio_url = str(submission.portfolio_url)
     force_refresh = submission.force_refresh or False
+    gemini_api_key = submission.gemini_api_key
 
     try:
         logger.info(f"📊 Grading request for: {portfolio_url} (force_refresh={force_refresh})")
@@ -267,7 +269,7 @@ async def grade_portfolio(
             logger.info(f"🔄 Cache cleared for {portfolio_url}, forcing fresh analysis")
 
         # Analyze portfolio
-        result = await analyzer.analyze(portfolio_url, force_refresh=force_refresh)
+        result = await analyzer.analyze(portfolio_url, force_refresh=force_refresh, gemini_api_key=gemini_api_key)
 
         if result.get("error"):
             raise HTTPException(

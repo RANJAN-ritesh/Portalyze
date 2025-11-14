@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { Globe, Sparkles, CheckCircle2, Zap, List, RefreshCw } from 'lucide-react';
+import { Globe, Sparkles, CheckCircle2, Zap, List, RefreshCw, Key, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface LandingProps {
-  onStartGrading: (portfolioUrl: string, forceRefresh: boolean) => void;
+  onStartGrading: (portfolioUrl: string, geminiApiKey: string, forceRefresh: boolean) => void;
 }
 
 export function Landing({ onStartGrading }: LandingProps) {
   const [url, setUrl] = useState('');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [error, setError] = useState('');
   const [forceRefresh, setForceRefresh] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,6 +19,12 @@ export function Landing({ onStartGrading }: LandingProps) {
     // Basic URL validation
     if (!url.trim()) {
       setError('Please enter your portfolio URL');
+      return;
+    }
+
+    // Gemini API key validation
+    if (!geminiApiKey.trim()) {
+      setError('Please enter your Gemini API key');
       return;
     }
 
@@ -36,7 +44,7 @@ export function Landing({ onStartGrading }: LandingProps) {
         return;
       }
 
-      onStartGrading(url, forceRefresh);
+      onStartGrading(url, geminiApiKey, forceRefresh);
     } catch {
       setError('Please enter a valid URL (e.g., https://yourportfolio.com)');
     }
@@ -100,12 +108,59 @@ export function Landing({ onStartGrading }: LandingProps) {
                 } text-white placeholder-gray-500`}
                 autoFocus
               />
-              {error && (
-                <p className="mt-2 text-sm text-red-400">
-                  {error}
-                </p>
-              )}
             </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="gemini-api-key" className="block text-sm font-medium text-gray-300">
+                  <span className="flex items-center gap-2">
+                    <Key className="w-4 h-4" />
+                    Gemini API Key <span className="text-red-500">*</span>
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowInstructions(!showInstructions)}
+                  className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                >
+                  How to get API key?
+                  {showInstructions ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+              </div>
+
+              {showInstructions && (
+                <div className="mb-3 p-4 bg-purple-900/20 border border-purple-800 rounded-lg text-sm text-purple-200">
+                  <p className="font-semibold mb-2">Steps to get your free Gemini API key:</p>
+                  <ol className="list-decimal list-inside space-y-2 text-xs">
+                    <li>Visit <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">Google AI Studio</a></li>
+                    <li>Sign in with your Google account</li>
+                    <li>Click on "Get API key" button</li>
+                    <li>Click "Create API key in new project" or select an existing project</li>
+                    <li>Copy the generated API key</li>
+                    <li>Paste it in the field below</li>
+                  </ol>
+                  <p className="mt-2 text-xs text-purple-300">Note: Your API key is only used for this analysis and is not stored anywhere.</p>
+                </div>
+              )}
+
+              <input
+                id="gemini-api-key"
+                type="password"
+                value={geminiApiKey}
+                onChange={(e) => {
+                  setGeminiApiKey(e.target.value);
+                  setError('');
+                }}
+                placeholder="Enter your Gemini API key"
+                className="w-full px-4 py-3 border-2 border-gray-700 bg-gray-800 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-white placeholder-gray-500"
+              />
+            </div>
+
+            {error && (
+              <p className="text-sm text-red-400">
+                {error}
+              </p>
+            )}
 
             {/* Force Refresh Checkbox */}
             <div className="flex items-center gap-2 text-sm">
@@ -124,7 +179,7 @@ export function Landing({ onStartGrading }: LandingProps) {
 
             <button
               type="submit"
-              disabled={!url.trim()}
+              disabled={!url.trim() || !geminiApiKey.trim()}
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold py-3 px-6 rounded-lg transition-all disabled:cursor-not-allowed shadow-lg"
             >
               Analyze Portfolio →
@@ -149,10 +204,10 @@ export function Landing({ onStartGrading }: LandingProps) {
             </div>
             <div className="text-center">
               <div className="w-10 h-10 mx-auto mb-2 bg-purple-600/20 rounded-full flex items-center justify-center">
-                <Zap className="w-5 h-5 text-purple-400" />
+                <Key className="w-5 h-5 text-purple-400" />
               </div>
-              <div className="text-xs font-semibold text-gray-300">Free</div>
-              <div className="text-xs text-gray-500">Always free</div>
+              <div className="text-xs font-semibold text-gray-300">Secure</div>
+              <div className="text-xs text-gray-500">Your API key</div>
             </div>
           </div>
 
@@ -189,7 +244,7 @@ export function Landing({ onStartGrading }: LandingProps) {
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-500 mt-6">
-          Powered by AI • Gemini + Groq • MediaPipe Face Detection
+          Powered by Google Gemini AI • Students Portal
         </p>
       </div>
     </div>

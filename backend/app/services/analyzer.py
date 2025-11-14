@@ -36,13 +36,14 @@ class PortfolioAnalyzer:
         self.rubric_engine = RubricEngine()
         self.image_validator = ImageValidator()
 
-    async def analyze(self, portfolio_url: str, force_refresh: bool = False) -> Dict[str, Any]:
+    async def analyze(self, portfolio_url: str, force_refresh: bool = False, gemini_api_key: Optional[str] = None) -> Dict[str, Any]:
         """
         Main analysis method
 
         Args:
             portfolio_url: Deployed portfolio URL
             force_refresh: If True, bypass cache and perform fresh analysis
+            gemini_api_key: Optional Gemini API key for this request
 
         Returns:
             Complete analysis results with checklist, AI feedback, and metadata
@@ -69,7 +70,7 @@ class PortfolioAnalyzer:
             # Run analyses in parallel for speed
             results = await asyncio.gather(
                 self._run_rubric_analysis(html_content, portfolio_url),
-                self._run_ai_analysis(html_content),
+                self._run_ai_analysis(html_content, gemini_api_key),
                 self._run_image_analysis(html_content),
                 return_exceptions=True
             )
@@ -745,13 +746,13 @@ class PortfolioAnalyzer:
             logger.error(f"Rubric analysis error: {str(e)}")
             return {"checklist": {}}
 
-    async def _run_ai_analysis(self, html_content: str) -> Dict[str, Any]:
+    async def _run_ai_analysis(self, html_content: str, gemini_api_key: Optional[str] = None) -> Dict[str, Any]:
         """Run AI analysis with fallback"""
         try:
             if not settings.enable_ai_analysis:
                 return {"analysis": "AI analysis disabled", "provider": "None"}
 
-            result = await self.ai_analyzer.analyze(html_content)
+            result = await self.ai_analyzer.analyze(html_content, gemini_api_key=gemini_api_key)
             return result
         except Exception as e:
             logger.error(f"AI analysis error: {str(e)}")
